@@ -90,19 +90,23 @@ module Nifflers
     end
 
     def default_branch
-      return `git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`.strip
+      return sh("git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'").strip
     end
 
     def compare_ref
-      return self.ref || self.default_branch
+      return self.ref || "origin/#{self.default_branch}"
+    end
+
+    def sh(cmd)
+      return `#{cmd}`
     end
 
     def start
       Dir.chdir(dest) do
-        files = `git diff --name-only $(git merge-base #{compare_ref} HEAD)`.lines.map(&:strip)
+        files = sh("git diff --name-only $(git merge-base #{compare_ref} HEAD)").lines.map(&:strip)
 
         if self.verbose
-          puts "** Files Changed"
+          puts "== Files Changed"
           files.each do |file|
             puts "- #{file}"
           end
@@ -114,7 +118,7 @@ module Nifflers
 
         files_spaced = test_files.join(" ")
 
-        puts "** Test Files Discovered"
+        puts "== Test Files Discovered"
         test_files.each do |file|
           puts "- #{file}"
         end
@@ -126,6 +130,12 @@ module Nifflers
           puts ""
 
           Kernel.exec(cmd)
+
+#          IO.popen(cmd) do |io|
+#            while (line = io.gets) do
+#              puts line
+#            end
+#          end
         end
       end
     end
@@ -141,9 +151,15 @@ module Nifflers
         next if extension != ext
 
         test_files += Dir["**/#{name}*_spec#{extension}"]
+        test_files += Dir["**/#{name}*_test#{extension}"]
+        test_files += Dir["**/#{name}*_tests#{extension}"]
 
-        if !file.end_with?("_spec.rb")
-          test_files.delete(file)
+        if file.end_with?("_spec.rb")
+          test_files << file
+        elsif file.end_with?("_test.py")
+          test_files << file
+        elsif file.end_with?("_tests.py")
+          test_files << file
         end
       end
 
